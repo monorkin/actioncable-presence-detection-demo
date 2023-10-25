@@ -1,24 +1,15 @@
-# README
+# ActionCable Presence Detection DEMO
 
-This README would normally document whatever steps are necessary to get the
-application up and running.
+This is a demonstration of how to do PresenceDetection with ActionCable.
 
-Things you may want to cover:
+## Setup
 
-* Ruby version
+Run the following commands to get the app up and running
 
-* System dependencies
-
-* Configuration
-
-* Database creation
-
-* Database initialization
-
-* How to run the test suite
-
-* Services (job queues, cache servers, search engines, etc.)
-
-* Deployment instructions
-
-* ...
+```bash
+bin/docked start
+# Then in another terminal
+bin/docked bash app
+bin/rails db:create db:migrate db:fixtures:load
+bin/dev
+```

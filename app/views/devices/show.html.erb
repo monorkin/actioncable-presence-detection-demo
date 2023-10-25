@@ -1,24 +1,25 @@
 <%= turbo_frame_tag :device do %>
   <div class="flex flex-col gap-y-6 p-4" data-controller="device-simulator" data-device-simulator-device-id-value="<%= @device.id %>">
-    <h1 class="text-3xl font-bold">
+    <h1 class="text-3xl font-bold truncate" title="<%= h @device.name %>">
       <%= device_online_status_indicator(@device, prefix: :header) %>
       <%= @device.name %>
     </h1>
 
     <div>
       <h4 class="font-semibold mb-2">Actions</h4>
-      <div class="flex flex-row gap-x-6">
+      <div class="flex flex-col gap-y-6 md:flex-row md:gap-x-6">
         <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" data-action="device-simulator#connectToWebSocket">
           Connect
         </button>
 
-        <button class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" data-action="device-simulator#disconnectFromWebSocket">
+        <button class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" data-action="device-simulator#disconnectFromWebSocket" data-device-simulator-target="disconnectButton">
           Disconnect
         </button>
 
-        <button class="bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded" data-action="device-simulator#abruptlyDisconnectToWebSocket">
-          Simulate Internet outage
-        </button>
+        <div class="flex flex-row gap-x-1 align-center items-center">
+          <span>Open connections:</span>
+          <span data-device-simulator-target="connectionCounter">-</span>
+        </div>
       </div>
     </div>
 

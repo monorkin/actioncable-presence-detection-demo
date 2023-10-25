@@ -6,8 +6,10 @@ export default class extends Controller {
     deviceId: String
   }
 
+  static targets = [ "disconnectButton", "connectionCounter" ]
+
   initialize() {
-    this.subscription = null
+    this.subscriptions = []
   }
 
   connect() {
@@ -22,6 +24,7 @@ export default class extends Controller {
     console.log(`Device Simulator for device ${this.deviceIdValue} is active`)
 
     this.initializeConsumer()
+    this.updateConnectionCounter()
   }
 
   disconnect() {
@@ -41,7 +44,7 @@ export default class extends Controller {
     event?.preventDefault()
     console.log(`[Device ${this.deviceIdValue}] Connecting to WebSocket...`)
 
-    this.subscription = this.consumer.subscriptions.create(
+    const subscription = this.consumer.subscriptions.create(
       {
         channel: "EventsChannel",
       },
@@ -51,30 +54,29 @@ export default class extends Controller {
         }
       }
     )
+
+    this.subscriptions.push(subscription)
+    this.updateConnectionCounter()
   }
 
   disconnectFromWebSocket(event) {
     event?.preventDefault()
     console.log(`[Device ${this.deviceIdValue}] Disconnecting from WebSocket...`)
 
-    this.subscription?.unsubscribe()
-    this.consumer.connection.close({ allowReconnect: false })
-    this.subscription = null
+    const subscription = this.subscriptions.pop()
+
+    subscription?.unsubscribe()
+
+    if (this.subscriptions.length === 0) {
+      this.consumer.connection.close({ allowReconnect: false })
+    }
+
+    this.updateConnectionCounter()
   }
 
-  abruptlyDisconnectToWebSocket(event) {
-    event?.preventDefault()
-    console.log(`[Device ${this.deviceIdValue}] Abruptly disconnecting from WebSocket...`)
+  updateConnectionCounter() {
+    if (!this.hasConnectionCounterTarget) return
 
-    this.consumer.connection.uninstallEventHandlers()
-    this.sockets ||= []
-    const webSocket = this.consumer.connection.webSocket
-    this.sockets.push(webSocket)
-
-    webSocket.onmessage = () => { console.log(`[Device ${this.deviceIdValue}] Message received on dead WebSocket`) }
-
-    this.consumer.connection.webSocket = null
-
-    console.log(`[Device ${this.deviceIdValue}] WebSocket`, this.consumer.connection.webSocket)
+    this.connectionCounterTarget.innerText = this.subscriptions.length
   }
 }
