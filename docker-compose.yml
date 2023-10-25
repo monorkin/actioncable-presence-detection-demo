@@ -1,0 +1,37 @@
+version: '3.6'
+services:
+  db:
+    image: "postgres:16"
+    environment:
+      - "POSTGRES_HOST_AUTH_METHOD=trust"
+    volumes:
+      - db_store:/var/lib/postgresql/data
+      - $PWD/dumps:/dumps
+
+  redis:
+    image: "redis:7"
+
+  app:
+    build:
+      context: .
+      target: development
+    image: 'presence-app:development'
+    command: '/bin/bash -c "while true; do sleep 10; done;"'
+    entrypoint: '/rails/bin/docker-development-entrypoint'
+    volumes:
+      - "$PWD:/rails"
+      - bundle_store:/usr/local/bundle
+    ports:
+      - "3400:3000"
+    depends_on:
+      - db
+    environment:
+      - "DISPLAY=:99"
+      - "DATABASE_HOST=db"
+      - "DATABASE_USER=postgres"
+      - "REDIS_URL=redis://redis"
+
+volumes:
+  db_store: {}
+  bundle_store: {}
+

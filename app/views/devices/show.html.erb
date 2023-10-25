@@ -1,0 +1,32 @@
+<%= turbo_frame_tag :device do %>
+  <div class="flex flex-col gap-y-6 p-4" data-controller="device-simulator" data-device-simulator-device-id-value="<%= @device.id %>">
+    <h1 class="text-3xl font-bold">
+      <%= device_online_status_indicator(@device, prefix: :header) %>
+      <%= @device.name %>
+    </h1>
+
+    <div>
+      <h4 class="font-semibold mb-2">Actions</h4>
+      <div class="flex flex-row gap-x-6">
+        <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" data-action="device-simulator#connectToWebSocket">
+          Connect
+        </button>
+
+        <button class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" data-action="device-simulator#disconnectFromWebSocket">
+          Disconnect
+        </button>
+
+        <button class="bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded" data-action="device-simulator#abruptlyDisconnectToWebSocket">
+          Simulate Internet outage
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <h4 class="font-semibold mb-2">Online Status Changes</h4>
+      <ul class="bg-white shadow-lg rounded-lg p-4 overflow-hidden flex flex-col" id="<%= dom_id(@device, :online_status_changes) %>">
+        <%= render @device.online_status_changes.order(created_at: :desc) %>
+      </ul>
+    </div>
+  </div>
+<% end %>

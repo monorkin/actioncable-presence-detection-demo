@@ -1,0 +1,5 @@
+#!/bin/bash -e
+
+Xvfb :99 -screen 0 1400x1400x24 &
+
+exec "${@}"

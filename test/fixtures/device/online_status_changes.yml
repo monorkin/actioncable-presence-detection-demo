@@ -1,0 +1,15 @@
+front_door_intercom_initial_status:
+  device: :front_door_intercom
+  status: :offline
+
+side_entrance_intercom_initial_status:
+  device: :side_entrance_intercom
+  status: :offline
+
+rooftop_keypad_initial_status:
+  device: :rooftop_keypad
+  status: :offline
+
+basement_keypad_initial_status:
+  device: :basement_keypad
+  status: :offline

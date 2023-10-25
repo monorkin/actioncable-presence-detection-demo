@@ -1,0 +1,26 @@
+<li class="flex flex-row gap-x-2 items-stretch justify-stretch">
+  <div class="flex relative basis-6 items-stretch justify-stretch">
+    <div class="bg-gray-300 w-px mx-auto"></div>
+    <div class="absolute left-0 right-0 top-4 flex justify-center items-center">
+      <% if online_status_change.to_online? %>
+        <div class="bg-green-500 w-3 h-3 rounded-full ring-white ring-2"></div>
+      <% else %>
+        <div class="bg-red-500 w-3 h-3 rounded-full ring-white ring-2"></div>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="flex flex-col p-2">
+    <div>
+      <% if online_status_change.to_online? %>
+        <span class="text-green-500">Came Online</span>
+      <% else %>
+        <span class="text-red-500">Went Offline</span>
+      <% end %>
+    </div>
+
+    <div class="text-gray-500">
+      <%= l(online_status_change.created_at) %>
+    </div>
+  </div>
+</li>

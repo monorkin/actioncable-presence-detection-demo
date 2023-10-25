@@ -1,0 +1,15 @@
+<div class="h-full flex flex-row divide-x">
+  <div class="basis-1/4 overflow-x-hidden overfloy-y-scroll">
+    <ul class="w-full divide-y">
+      <%= render @devices %>
+    </ul>
+  </div>
+
+  <div class="basis-3/4 bg-gray-100 overflow-y-scroll">
+    <%= turbo_frame_tag :device do %>
+      <p class="p-4 text-gray-600 w-full h-full flex items-center justify-center text-2xl select-none">
+        Pick a device from the left to control it.
+      </p>
+    <% end %>
+  </div>
+</div>

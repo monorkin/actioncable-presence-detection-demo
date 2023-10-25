@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+if [ "$1" = "bash" ]; then
+    # Run bash as the current user
+    docker compose exec -it --user "$UID:$GID" "$2" bash
+elif [ "$1" = "root" ]; then
+    # Run bash as root
+    docker compose exec -it --user root:root "$2" bash
+elif [ "$1" = "start" ]; then
+    # Start the containers
+    docker compose up
+elif [ "$1" = "stop" ]; then
+    # Stop the containers
+    docker compose down
+elif [ "$1" = "server" ]; then
+    # Starts the development server within the container env
+    docker compose exec -it --user "$UID:$GID" app bin/dev
+else
+  echo "Invalid argument: $1"
+  echo "Usage: docked [start|stop|bash|root] <container>"
+  exit 1
+fi

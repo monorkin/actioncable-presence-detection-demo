@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html class="h-full">
+  <head>
+    <title>PresenceApp</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= stylesheet_link_tag "tailwind", "inter-font", "data-turbo-track": "reload" %>
+
+    <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body class="h-full">
+    <main class="h-full flex flex-col">
+      <%= turbo_stream_from :events %>
+      <%= yield %>
+    </main>
+  </body>
+</html>

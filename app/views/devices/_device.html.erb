@@ -1,0 +1,11 @@
+<%# locals: (device:, device_counter: nil, device_iteration: nil) -%>
+
+<li class="relative hover:bg-gray-100 px-2 py-4">
+  <%= link_to "", device, class: "block absolute inset-0 z-40", data: { turbo_frame: :device } %>
+  <div class="flex flex-row gap-x-2 items-center z-30">
+    <%= device_online_status_indicator(device) %>
+    <div>
+      <%= device.name %>
+    </div>
+  </div>
+</li>

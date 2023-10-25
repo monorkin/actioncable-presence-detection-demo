@@ -1,0 +1,12 @@
+front_door_intercom:
+  name: Front Door Intercom
+
+side_entrance_intercom:
+  name: Side Entrance Intercom
+
+rooftop_keypad:
+  name: Rooftop Keypad
+
+basement_keypad:
+  name: Basement Keypad
+
