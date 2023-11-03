@@ -28,6 +28,10 @@ export default class extends Controller {
   }
 
   disconnect() {
+    for(let i in this.subscriptions) {
+      this.disconnectFromWebSocket()
+    }
+
     this.disconnectFromWebSocket()
   }
 
@@ -38,6 +42,7 @@ export default class extends Controller {
     const deviceId = url.searchParams.set("device_id", this.deviceIdValue)
 
     this.consumer = createConsumer(url)
+    this.monkeyPatchConsumer()
   }
 
   connectToWebSocket(event) {
@@ -78,5 +83,29 @@ export default class extends Controller {
     if (!this.hasConnectionCounterTarget) return
 
     this.connectionCounterTarget.innerText = this.subscriptions.length
+  }
+
+  monkeyPatchConsumer() {
+    console.log("🩹 MonkeyPatching the ActionCable consumer to respond to PINGs with PONGs")
+
+    const originalMessageHandler = this.consumer.connection.events.message
+
+    this.consumer.connection.events.message = function(event) {
+      console.log("🩹 Invoked patched ActionCable.Connection.events.message")
+
+      const {type, message} = JSON.parse(event.data)
+      console.log(`🩹 Received message of type ${type}`)
+      switch (type) {
+        case "ping":
+          console.log("🩹 Received server-side PING")
+          console.log("🩹 Sending back PONG")
+          this.send({ type: "pong", message: message })
+          console.log("🩹 Logging received PING")
+          return this.monitor.recordPing()
+        default:
+          console.log("🩹 Unpatched message. Passing it through to original handler...")
+          originalMessageHandler.apply(this, [event])
+      }
+    }
   }
 }
