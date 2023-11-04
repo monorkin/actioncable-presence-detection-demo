@@ -6,7 +6,7 @@ export default class extends Controller {
     deviceId: String
   }
 
-  static targets = [ "disconnectButton", "connectionCounter" ]
+  static targets = [ "disconnectButton", "connectionCounter", "latencyLabel" ]
 
   initialize() {
     this.subscriptions = []
@@ -62,6 +62,7 @@ export default class extends Controller {
 
     this.subscriptions.push(subscription)
     this.updateConnectionCounter()
+    this.startLatencyMonitor()
   }
 
   disconnectFromWebSocket(event) {
@@ -74,6 +75,7 @@ export default class extends Controller {
 
     if (this.subscriptions.length === 0) {
       this.consumer.connection.close({ allowReconnect: false })
+      this.stopLatencyMonitor()
     }
 
     this.updateConnectionCounter()
@@ -83,6 +85,23 @@ export default class extends Controller {
     if (!this.hasConnectionCounterTarget) return
 
     this.connectionCounterTarget.innerText = this.subscriptions.length
+  }
+
+  startLatencyMonitor() {
+    this.stopLatencyMonitor()
+    this.latencyMonitorInterval = setInterval(() => {
+      const latency = this.consumer.connection.monitor.latency
+      if (!latency) return
+
+      console.log(`[Device ${this.deviceIdValue}] Latency is ${latency}ms`)
+      if (this.hasLatencyLabelTarget) {
+        this.latencyLabelTarget.innerText = `${latency}ms`
+      }
+    }, 1000)
+  }
+
+  stopLatencyMonitor() {
+    clearInterval(this.latencyMonitorInterval)
   }
 
   monkeyPatchConsumer() {
@@ -127,6 +146,9 @@ export default class extends Controller {
       const message = JSON.parse(event.data)
       if (message.type === "pong") {
         console.log("🩹 Received heartbeat pong")
+        if (message.timestamp) {
+          this.monitor.latency = Date.now() - message.timestamp
+        }
         return this.monitor.recordPing()
       }
       else {
