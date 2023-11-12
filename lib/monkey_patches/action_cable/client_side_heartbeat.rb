@@ -73,16 +73,10 @@ module MonkeyPatches
         # Checks if the connection is expecting PONG messages from the client
         def expects_client_side_heartbeat?
           protocol&.start_with?("actioncable-v1.1")
-        rescue Exception => e
-          rescue_with_handler(e)
-          logger.error "expects_client_side_heartbeat? error [#{e.class} - #{e.message}]: #{e.backtrace.first(5).join(" | ")}"
         end
 
         def dead_connection_treshold
           ::ActionCable::Server::Connections::BEAT_INTERVAL.seconds * 2
-        rescue Exception => e
-          rescue_with_handler(e)
-          logger.error "dead_connection_treshold error [#{e.class} - #{e.message}]: #{e.backtrace.first(5).join(" | ")}"
         end
       end
 

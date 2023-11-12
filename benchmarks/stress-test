@@ -1,0 +1,444 @@
+#!/usr/bin/env ruby
+
+require "optparse"
+require "logger"
+require "uri"
+
+begin
+  require "async"
+  require "async/barrier"
+  require "async/http/endpoint"
+  require "async/websocket/client"
+  require "protocol/websocket/json_message"
+  require "parallel"
+rescue LoadError
+  require "bundler/inline"
+
+  gemfile(true) do
+    source "https://rubygems.org"
+
+    git_source(:github) { |repo| "https://github.com/#{repo}.git" }
+
+    gem "async"
+    gem "async-http"
+    gem "async-websocket"
+    gem "parallel"
+  end
+
+  retry
+end
+
+class Executor
+  attr_reader :connection_count, :url, :duration, :headers, :in_parallel
+
+  def initialize(connection_count:, url:, duration: nil, headers: nil, logger: nil)
+    @connection_count = connection_count
+    @url = url
+    @duration = duration || 60
+    @headers = headers
+    @logger = logger
+  end
+
+  def execute
+    group_size = 1000
+    group_count = connection_count / group_size
+
+    groups = [group_size.times.to_a] * group_count
+
+    rest = connection_count % group_size
+    if rest.positive?
+      groups << rest.times.to_a
+    end
+
+    Parallel.each(groups, in_processes: group_count) do |group|
+      started_at = Time.now
+
+      Sync do |task|
+        logger&.info "Starting #{connection_count} connections to '#{url}' for #{duration} seconds"
+        clients = group.map do
+          Client.new(
+            task: task,
+            url: url,
+            headers: headers,
+            logger: logger
+          ).tap(&:connect)
+        end
+
+        task.async do
+          loop do
+            connected = clients.select(&:connected?).size
+            connecting = clients.select(&:connecting?).size
+            disconnected = clients.select(&:disconnected?).size
+            duration = Time.now.to_i - started_at.to_i
+
+            logger&.info "Connected: #{connected}, Connecting: #{connecting}, Disconnected: #{disconnected} (in #{duration} seconds)"
+            sleep 1
+          end
+        end
+
+        logger&.info "Waiting for #{duration} seconds"
+        sleep(duration)
+
+        logger&.info "Disconnecting #{connection_count} connections"
+        clients.each(&:disconnect)
+      end
+    end
+  end
+
+  private
+
+    attr_reader :logger
+end
+
+class Client
+  extend Forwardable
+
+  attr_reader :connection, :subscriptions
+
+  delegate %i[connect disconnect transmit connecting? connected? disconnected?] => :connection
+  delegate %i[subscribe unsubscribe] => :subscriptions
+
+  def initialize(url:, task: nil, headers: nil, logger: nil)
+    @connection = Connection.new(
+      client: self,
+      url: url,
+      headers: headers,
+      task: task,
+      logger: logger
+    )
+
+    @subscriptions = Subscriptions.new(
+      client: self,
+      logger: logger
+    )
+
+    @logger = logger
+  end
+
+  def process_welcome_message(message)
+  end
+
+  def process_ping_message(message)
+  end
+
+  def process_message(message)
+  end
+
+  def process_binary_message(message)
+  end
+
+  def process_confirm_subscription_message(message)
+  end
+
+  def process_reject_subscription_message(message)
+  end
+
+  private
+
+    attr_reader :logger
+end
+
+class Client::Connection
+  extend Forwardable
+
+  attr_reader :client, :url, :headers, :task, :monitor
+
+  delegate %i[
+    connected? connecting? disconnected?
+    connecting! connected! disconnected!
+  ] => :monitor
+
+  def initialize(client:, url:, headers: nil, task: nil, logger: nil)
+    @mutex = Mutex.new
+    @client = client
+    @url = url
+    @headers = headers || {}
+    @task = task
+    @logger = logger
+
+    @monitor = Monitor.new(
+      connection: self,
+      logger: logger
+    )
+  end
+
+  def connect
+    mutex.synchronize do
+      return unless disconnected?
+
+      stop
+      start
+    end
+
+    true
+  end
+
+  def disconnect
+    mutex.synchronize do
+      return false unless connected? || connecting?
+
+      stop
+      disconnected!
+    end
+
+    true
+  end
+
+  def transmit(data)
+    outbox.enqueue(data.to_json)
+  end
+
+  private
+
+    attr_reader :mutex, :logger
+    attr_accessor :event_loop
+
+    def inbox
+      @inbox ||= Async::Queue.new
+    end
+
+    def outbox
+      @outbox ||= Async::Queue.new
+    end
+
+    def start
+      self.event_loop ||= if self.task
+        logger&.debug "Starting event loop on task"
+        self.task.async { run }
+      else
+        logger&.debug "Starting event loop on new task"
+        Async { run }
+      end
+    end
+
+    def stop
+      return unless event_loop
+
+      logger&.debug "Stopping event loop"
+      event_loop&.stop
+      self.event_loop = nil
+    end
+
+    def run
+      logger&.debug "Running..."
+      barrier = Async::Barrier.new
+
+      logger&.debug "Starting IO loop"
+      barrier.async do
+        run_io_loop
+      end
+
+      logger&.debug "Starting protocol loop"
+      barrier.async do
+        run_protocol_loop
+      end
+
+      barrier.wait
+    end
+
+    def run_io_loop
+      logger&.debug "Configuring WebSocket connection..."
+
+      barrier = Async::Barrier.new
+      endpoint = Async::HTTP::Endpoint.parse(url)
+
+      uri = URI(url)
+      uri.path = ""
+      uri.query = nil
+      uri.fragment = nil
+      uri.scheme = uri.scheme == "wss" ? "https" : "http"
+
+      headers = {
+        "Origin" => uri.to_s,
+      }.merge(self.headers)
+
+      logger&.debug "Connecting to WebSocket..."
+      Async::WebSocket::Client.connect(endpoint, headers: headers) do |connection|
+        barrier.async do
+          while message = outbox.dequeue
+            connection.write(message)
+          end
+        end
+
+        barrier.async do
+          while message = connection.read
+            inbox.enqueue(message)
+          end
+        end
+
+        barrier.wait
+      end
+    end
+
+    def run_protocol_loop
+      loop do
+        message = inbox.dequeue
+        logger.debug "Received message of type: #{message.class}"
+
+        case message
+        when Protocol::WebSocket::TextMessage
+          logger&.debug "Received message: #{message.inspect}"
+          json_message = Protocol::WebSocket::JSONMessage.wrap(message)
+
+          begin
+            payload = json_message.parse
+          rescue JSON::ParserError
+            logger&.error "Received invalid JSON message: #{message.inspect}"
+            next
+          end
+
+          process_message(payload)
+        when Protocol::WebSocket::BinaryMessage
+          logger&.debug "Received binary message"
+          process_binary_message(message)
+        else
+          logger&.error "Received unknown message: #{message.inspect}"
+        end
+      end
+    end
+
+    def process_message(message)
+      logger&.debug "Processing message: #{message.inspect}"
+
+      case message
+      in { type: "ping" }
+        logger&.debug "Received ping message"
+        monitor.refresh_heartbeat_timeout
+        client.process_ping_message(message)
+      in { type: "welcome" }
+        logger&.debug "Received welcome message"
+        connected!
+        client.process_welcome_message(message)
+      in { type: "message" }
+        logger&.debug "Received generic message"
+        client.process_message(message)
+      in { type: "confirm_subscription" }
+        logger&.debug "Received confirm_subscription message"
+        client.process_confirm_subscription_message(message)
+      in { type: "reject_subscription" }
+        logger&.debug "Received reject_subscription message"
+        client.process_reject_subscription_message(message)
+      in { type: "disconnect" }
+        logger&.debug "Received disconnect message"
+        disconnect
+        client.process_disconnect_message(message)
+      else
+        logger&.error "Received unknown message: #{message.inspect}"
+        client.process_unknown_message(message)
+      end
+    end
+
+    def process_binary_message(message)
+      client.process_binary_message(message)
+    end
+end
+
+class Client::Connection::Monitor
+  STATUSES = %i[
+    disconnected
+    connecting
+    connected
+  ].freeze
+
+  attr_reader :connection, :status, :last_heartbeat_received_at
+
+  def initialize(connection:, logger: nil)
+    @connection = connection
+    @logger = logger
+    @status = :disconnected
+    @last_heartbeat_received_at = nil
+  end
+
+  STATUSES.each do |status|
+    define_method("#{status}?") do
+      self.status == status
+    end
+  end
+
+  def disconnected!
+    @status = :disconnected
+  end
+
+  def connecting!
+    @status = :connecting
+  end
+
+  def connected!
+    refresh_heartbeat_timeout
+    @status = :connected
+  end
+
+  def refresh_heartbeat_timeout
+    logger&.debug "Refreshing heartbeat timeout"
+    if @last_heartbeat_received_at
+      delta = Time.now.to_f - @last_heartbeat_received_at.to_f
+      logger&.debug "Delay between heartbeats: #{delta}s"
+    end
+    @last_heartbeat_received_at = Time.now
+  end
+
+  private
+
+    attr_reader :logger
+end
+
+class Client::Subscriptions
+  def initialize(client:, logger: nil)
+    @client = client
+    @logger = logger
+  end
+
+  def add(channel, params = {})
+    logger&.debug "Subscribing to '#{channel}' with params: #{params.inspect}"
+  end
+
+  alias subscribe add
+
+  def remove(channel, params = {})
+    logger&.debug "Unsubscribing from '#{channel}' with params: #{params.inspect}"
+  end
+
+  alias unsubscribe remove
+
+  private
+
+    attr_reader :logger
+end
+
+options = {}
+
+OptionParser.new do |parser|
+  parser.banner = "Usage: #{ARGV[0]} [options]"
+
+  parser.on("-v", "--[no-]verbose", "Run verbosely") do |v|
+    options[:verbose] = v
+  end
+
+  parser.on("-u", "--url URL", "Server URL") do |url|
+    options[:url] = url
+  end
+
+  parser.on("-c", "--connection-count NUM", Integer, "Number of connections to open") do |count|
+    options[:connection_count] = count
+  end
+
+  parser.on("-d", "--duration SECONDS", Integer, "Duration of the test in seconds") do |duration|
+    options[:duration] = duration
+  end
+end.parse!
+
+options[:url] ||= "http://localhost:3000/cable"
+options[:connection_count] ||= 1
+options[:duration] ||= 60
+
+logger = Logger.new(STDOUT)
+logger.level = options[:verbose] ? Logger::DEBUG : Logger::INFO
+
+logger.info "Starting stress test with options: #{options}"
+
+Executor.new(
+  connection_count: options[:connection_count],
+  url: options[:url],
+  duration: options[:duration],
+  logger: logger
+).execute
