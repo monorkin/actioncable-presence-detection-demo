@@ -55,7 +55,14 @@ module MonkeyPatches
           if latency.negative?
             logger.info "🩹 We have a time traveler! Latency: #{latency}ms (#{connection_identifier})"
           else
-            logger.info "🩹 Roundtrip latency: #{latency.round(6)}ms (#{connection_identifier})"
+            logger.info "🩹 Latency: #{latency}ms (#{connection_identifier})"
+            ActiveSupport::Notifications.instrument(
+              "connection.latency",
+              value: latency,
+              action: :timing,
+              connection_identifier: connection_identifier,
+              identifiers: identifiers.map { |id| [id, instance_variable_get("@#{id}")] }.to_h
+            )
           end
         rescue Exception => e
           rescue_with_handler(e)
