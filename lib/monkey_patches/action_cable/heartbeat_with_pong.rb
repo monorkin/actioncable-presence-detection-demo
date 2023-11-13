@@ -24,9 +24,9 @@ module MonkeyPatches
         # to the server's PING within the expected timeframe, the client is
         # assumed to have disconnected and the connection is closed.
         def beat
-          return super unless expects_pong_message?
+          return super unless expects_pong_response_to_heartbeat?
 
-          if stale_connection?
+          if connection_half_open?
             logger.debug "🩹 PONG received too long ago. Closing connection (#{connection_identifier}) due to client-side heartbeat timeout"
             subscriptions.unsubscribe_from_all
             close(reason: ::ActionCable::INTERNAL[:disconnect_reasons][:heartbeat_timeout])
@@ -42,9 +42,6 @@ module MonkeyPatches
         end
 
         # Processes incoming PONG messages from the client
-        # When a PONG is recieved:
-        # 1. The connection logs when it received the message
-        # 2. The connection marks itself as expecting PONG messages from now on
         def register_client_pong!(data)
           logger.debug "🩹 Invoked ActionCable::Connection::Base#register_client_pong! data: #{data}"
 
@@ -69,22 +66,28 @@ module MonkeyPatches
           logger.error "#register_client_pong! error [#{e.class} - #{e.message}]: #{e.backtrace.first(5).join(" | ")}"
         end
 
-        # Checks if the connection is expecting PONG messages from the client
-        def expects_pong_message?
-          protocol&.start_with?("actioncable-v1.1")
+        # Checks if the connection is expecting PONG messages from the client in
+        # response to a heartbeat PING
+        def expects_pong_response_to_heartbeat?
+          protocol&.start_with?("actioncable-v1.1-")
         end
 
-        # Returns true if the connection has become stale
-        # This means that the client didn't send a message back within the
-        # #dead_connection_treshold since the last pong or since the connection
-        # was established
-        def stale_connection?
+        # Returns true if the connection is considered to be half-open
+        #
+        # A half-open connection means that the client has disconnected
+        # without closing the connection, so the server's OS keeps the connection
+        # open hoping that the client will continue the connection.
+        #
+        # To detect a half-open connection we check if the connection was
+        # started within, or if last heartbeat PONG response came within, a
+        # certain timeframe.
+        def connection_half_open?
           last_message_timestamp = @last_pong_at || @started_at
-          last_message_timestamp&.before?(dead_connection_treshold.ago)
+          last_message_timestamp&.before?(half_open_connection_treshold.ago)
         end
 
-        # Returns the time after which a connection is considered to be dead
-        def dead_connection_treshold
+        # Returns the time after which a connection is considered to be half-open
+        def half_open_connection_treshold
           ::ActionCable::Server::Connections::BEAT_INTERVAL.seconds * 2
         end
       end
