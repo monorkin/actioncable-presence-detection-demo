@@ -76,7 +76,8 @@ module MonkeyPatches
         #
         # A half-open connection means that the client has disconnected
         # without closing the connection, so the server's OS keeps the connection
-        # open hoping that the client will continue the connection.
+        # virtually open, buffering any outgoing messages, hoping that the
+        # client will continue the connection.
         #
         # To detect a half-open connection we check if the connection was
         # started within, or if last heartbeat PONG response came within, a
