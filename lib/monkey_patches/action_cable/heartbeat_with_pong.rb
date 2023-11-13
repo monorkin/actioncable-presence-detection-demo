@@ -17,6 +17,16 @@ module MonkeyPatches
       end
 
       module ConnectionExtensions
+        def initialize(...)
+          super
+          @last_message_received_at = @started_at
+        end
+
+        def receive(...)
+          @last_message_received_at = Time.now
+          super
+        end
+
         # Patched to check if the client responded with a PONG message to the
         # server's hearbeat PING.
         #
@@ -44,8 +54,6 @@ module MonkeyPatches
         # Processes incoming PONG messages from the client
         def register_client_pong!(data)
           logger.debug "🩹 Invoked ActionCable::Connection::Base#register_client_pong! data: #{data}"
-
-          @last_pong_at = Time.now
 
           latency = Time.now.to_f - data["message"].to_f
 
@@ -83,8 +91,7 @@ module MonkeyPatches
         # started within, or if last heartbeat PONG response came within, a
         # certain timeframe.
         def connection_half_open?
-          last_message_timestamp = @last_pong_at || @started_at
-          last_message_timestamp&.before?(half_open_connection_treshold.ago)
+          @last_message_received_at.before?(half_open_connection_treshold.ago)
         end
 
         # Returns the time after which a connection is considered to be half-open
