@@ -1,5 +1,7 @@
 source "https://rubygems.org"
 
+git_source(:github) { |repo| "https://github.com/#{repo}.git" }
+
 ruby ">= 3"
 
 gem "bootsnap", require: false
@@ -9,7 +11,7 @@ gem "jbuilder"
 gem "pg", "~> 1.1"
 gem "propshaft"
 gem "puma", ">= 5.0"
-gem "rails", "~> 7.1.1"
+gem "rails", github: "monorkin/rails", branch: "add-pong-response-to-heartbeat-ping-messages"
 gem "redis", ">= 4.0.1"
 gem "stimulus-rails"
 gem "tailwindcss-rails"

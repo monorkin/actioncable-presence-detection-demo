@@ -108,6 +108,6 @@ export default class extends Controller {
 
   monkeyPatchConsumer() {
     // installClientSideHeartbeatMonkeyPath(this.consumer)
-    installHeartbeatWithPongMonkeyPath(this.consumer)
+    // installHeartbeatWithPongMonkeyPath(this.consumer)
   }
 }
